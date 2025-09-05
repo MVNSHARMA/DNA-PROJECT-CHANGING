@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+logs/
+*.log
+
+# Datasets and large media
+chest_xray/
+cxr_multi/
+TB_Chest_Radiography_Database/
+static/uploads/
+uploads/
+*.csv
+*.xlsx
+
+# Model artifacts and outputs
+outputs/
+outputs_multi/
+*.pth
+*.pt
+*.onnx
+
+# Cache
+.cache/
+**/.cache/
+*.tmp
+*.bak
+
+# Build
+build/
+dist/
+
