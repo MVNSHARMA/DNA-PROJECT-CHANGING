@@ -10,7 +10,16 @@
         <div class="card shadow-lg p-4 text-center">
             <h2 class="text-primary">🩺 Prediction Result</h2>
             <p class="lead">The uploaded X-ray was classified as:</p>
-            <h3 class="text-success"><b>{{ prediction }}</b></h3>
+            {% if prediction == 'UNKNOWN' %}
+            <h3 class="text-warning"><b>UNKNOWN / OTHER</b></h3>
+            <p class="text-muted">The model is not confident enough to assign this image to known classes. (max confidence {{ (confidence * 100) | round(1) }}% &lt; {{ (threshold * 100) | round(0) }}% threshold)</p>
+            {% else %}
+            <h3 class="text-success"><b>{{ display_label or prediction }}</b></h3>
+            {% if show_subtype_na %}
+            <p class="text-muted">Subtype: N/A (no subtype training data)</p>
+            {% endif %}
+            <p class="text-muted">Confidence: {{ (confidence * 100) | round(1) }}%</p>
+            {% endif %}
 
             <img src="{{ url_for('static', filename='uploads/' + filename) }}" 
                  alt="Uploaded X-ray" class="img-fluid rounded mt-3 shadow">

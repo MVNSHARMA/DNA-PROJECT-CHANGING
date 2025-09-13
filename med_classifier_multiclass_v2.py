@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.sampler import WeightedRandomSampler
 from torchvision import models, transforms
 
 class ChestXrayDataset(Dataset):
@@ -37,10 +38,28 @@ def compute_class_weights(train_df, class_names):
         weights.append(w)
     return torch.tensor(weights, dtype=torch.float32)
 
-def train_model(model, dataloaders, criterion, optimizer, device, num_epochs, output_dir, class_names):
+
+class EarlyStopping:
+    """Early stop training when monitored metric has not improved for patience epochs."""
+    def __init__(self, patience: int = 5, min_delta: float = 0.0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.best = None
+        self.bad_epochs = 0
+
+    def step(self, metric: float) -> bool:
+        if self.best is None or metric > self.best + self.min_delta:
+            self.best = metric
+            self.bad_epochs = 0
+            return False
+        self.bad_epochs += 1
+        return self.bad_epochs > self.patience
+
+def train_model(model, dataloaders, criterion, optimizer, scheduler, device, num_epochs, output_dir, class_names):
     best_acc = 0.0
     os.makedirs(output_dir, exist_ok=True)
-    ckpt_path = os.path.join(output_dir, "model.pth")   # 🔹 always save as model.pth
+    ckpt_path = os.path.join(output_dir, "model_multiclass.pth")
+    early_stopper = EarlyStopping(patience=5, min_delta=1e-4)
 
     for epoch in range(num_epochs):
         print(f"\nEpoch {epoch+1}/{num_epochs}")
@@ -70,13 +89,25 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs, ou
             epoch_acc = running_corrects / max(total, 1)
             print(f"{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}")
 
-            if phase == "val" and epoch_acc > best_acc:
-                best_acc = epoch_acc
-                torch.save({
-                    "model_state_dict": model.state_dict(),
-                    "class_names": class_names
-                }, ckpt_path)
-                print("✅ Best model saved")
+            if phase == "train":
+                # step LR scheduler per epoch
+                if scheduler is not None:
+                    scheduler.step()
+            else:
+                # validation phase
+                if epoch_acc > best_acc:
+                    best_acc = epoch_acc
+                    torch.save({
+                        "model_state_dict": model.state_dict(),
+                        "class_names": class_names
+                    }, ckpt_path)
+                    print("✅ Best model saved")
+                # early stopping check on validation accuracy
+                if early_stopper.step(epoch_acc):
+                    print("🛑 Early stopping triggered.")
+                    print(f"Training complete. Best val Acc: {best_acc:.4f}")
+                    print(f"Model checkpoint: {ckpt_path}")
+                    return
 
     print(f"\nTraining complete. Best val Acc: {best_acc:.4f}")
     print(f"Model checkpoint: {ckpt_path}")
@@ -85,9 +116,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv_path", required=True)
     ap.add_argument("--output_dir", default="outputs_multi")
-    ap.add_argument("--epochs", type=int, default=10)
+    ap.add_argument("--epochs", type=int, default=15)
     ap.add_argument("--batch_size", type=int, default=32)
-    ap.add_argument("--lr", type=float, default=1e-4)
+    ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--label_smoothing", type=float, default=0.05)
     args = ap.parse_args()
 
     df = pd.read_csv(args.csv_path)
@@ -98,8 +130,10 @@ def main():
 
     transforms_map = {
         "train": transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.RandomHorizontalFlip(),
+            transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomRotation(degrees=10),
+            transforms.ColorJitter(brightness=0.1, contrast=0.1),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406],
                                  [0.229, 0.224, 0.225]),
@@ -117,10 +151,23 @@ def main():
         for split in ["train", "val"]
         if (df["split"] == split).any()
     }
-    dataloaders = {
-        split: DataLoader(datasets[split], batch_size=args.batch_size, shuffle=True, num_workers=0)
-        for split in datasets.keys()
-    }
+    dataloaders = {}
+    for split in datasets.keys():
+        if split == "train":
+            # Balanced sampling to mitigate class imbalance
+            labels = [class_to_idx[row_label] for row_label in df[df["split"] == "train"]["label"].tolist()]
+            class_sample_counts = [labels.count(i) for i in range(len(class_names))]
+            # inverse frequency per class
+            weights_per_class = [0 if c == 0 else 1.0 / c for c in class_sample_counts]
+            weights = [weights_per_class[y] for y in labels]
+            sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+            dataloaders[split] = DataLoader(
+                datasets[split], batch_size=args.batch_size, sampler=sampler, num_workers=0
+            )
+        else:
+            dataloaders[split] = DataLoader(
+                datasets[split], batch_size=args.batch_size, shuffle=False, num_workers=0
+            )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
@@ -130,14 +177,15 @@ def main():
     # class weights for imbalance (optional but helpful)
     if "train" in datasets:
         class_weights = compute_class_weights(df[df["split"] == "train"], class_names).to(device)
-        criterion = nn.CrossEntropyLoss(weight=class_weights)
+        criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=args.label_smoothing)
     else:
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(args.epochs, 1))
 
     train_model(
-        model, dataloaders, criterion, optimizer, device,
+        model, dataloaders, criterion, optimizer, scheduler, device,
         num_epochs=args.epochs, output_dir=args.output_dir, class_names=class_names
     )
 

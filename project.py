@@ -7,6 +7,8 @@ import argparse
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 
+
+
 import numpy as np
 import pandas as pd
 from PIL import Image
@@ -236,6 +238,7 @@ class GradCAM:
         layer = dict([*model.named_modules()])[target_layer]
         layer.register_forward_hook(self.fwd_hook)
         layer.register_full_backward_hook(self.bwd_hook)
+
 
     def fwd_hook(self, m, i, o):
         self.target_acts = o.detach()
