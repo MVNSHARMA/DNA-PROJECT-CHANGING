@@ -17,21 +17,20 @@ Thumbs.db
 logs/
 *.log
 
-# Datasets and large media
-chest_xray/
-cxr_multi/
-TB_Chest_Radiography_Database/
-static/uploads/
-uploads/
-*.csv
+# Large uploads (keep static folder structure)
+static/uploads/*
+uploads/*
+
+# Excel files
 *.xlsx
 
-# Model artifacts and outputs
-outputs/
-outputs_multi/
-*.pth
-*.pt
-*.onnx
+# Keep essential project files:
+# - chest_xray/ (dataset)
+# - cxr_multi/ (dataset) 
+# - TB_Chest_Radiography_Database/ (dataset)
+# - outputs/ and outputs_multi/ (model checkpoints)
+# - *.csv files (label files)
+# - *.pth files (model weights)
 
 # Cache
 .cache/
