@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: chest-xray-classifier
+    runtime: python
+    buildCommand: bash build.sh
+    startCommand: python -m gunicorn app_multiclass_dynamic:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: MODEL_PATH
+        value: outputs_multi/model_multiclass.pth
+      - key: PYTHON_VERSION
+        value: 3.11.0

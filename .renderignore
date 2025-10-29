@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.idea/
+.vscode/
+*.log
+TB_Chest_Radiography_Database/
+chest_xray/
+cxr_multi/
+upload folder/
+*.zip
+*.csv
+*.xlsx
+*.pptx
+*.docx
+.DS_Store
+__MACOSX/
+.git/
+.gitignore
+README.md
+DEPLOYMENT.md
+*.md

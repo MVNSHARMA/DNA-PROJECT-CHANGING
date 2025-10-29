@@ -6,8 +6,8 @@ from flask import Flask, request, render_template, redirect
 from werkzeug.utils import secure_filename
 from PIL import Image
 
-app = Flask(__name__)
-UPLOAD_FOLDER = "uploads"
+app = Flask(__name__, static_folder="static")
+UPLOAD_FOLDER = "static/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 

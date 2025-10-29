@@ -10,16 +10,25 @@
         <div class="card shadow-lg p-4 text-center">
             <h2 class="text-primary">🩺 Prediction Result</h2>
             <p class="lead">The uploaded X-ray was classified as:</p>
-            {% if prediction == 'UNKNOWN' %}
-            <h3 class="text-warning"><b>UNKNOWN / OTHER</b></h3>
-            <p class="text-muted">The model is not confident enough to assign this image to known classes. (max confidence {{ (confidence * 100) | round(1) }}% &lt; {{ (threshold * 100) | round(0) }}% threshold)</p>
-            {% else %}
-            <h3 class="text-success"><b>{{ display_label or prediction }}</b></h3>
-            {% if show_subtype_na %}
-            <p class="text-muted">Subtype: N/A (no subtype training data)</p>
-            {% endif %}
+            
+            <h3 class="text-success"><b>{{ label }}</b></h3>
             <p class="text-muted">Confidence: {{ (confidence * 100) | round(1) }}%</p>
-            {% endif %}
+            
+            <div class="mt-3">
+                <h5>Class Distribution:</h5>
+                <div class="row justify-content-center">
+                    {% for class_name, prob in dist[:3] %}
+                    <div class="col-md-4 mb-2">
+                        <div class="card">
+                            <div class="card-body">
+                                <strong>{{ class_name }}</strong><br>
+                                <span class="badge bg-primary">{{ (prob * 100) | round(1) }}%</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
 
             <img src="{{ url_for('static', filename='uploads/' + filename) }}" 
                  alt="Uploaded X-ray" class="img-fluid rounded mt-3 shadow">
